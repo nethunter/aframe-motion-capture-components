@@ -9,12 +9,13 @@ var warn = AFRAME.utils.debug('aframe-motion-capture:avatar-recorder:warn');
  */
 AFRAME.registerComponent('avatar-recorder', {
   schema: {
-    autoPlay: {default: false},
-    autoRecord: {default: false},
-    cameraOverride: {type: 'selector'},
-    localStorage: {default: true},
-    recordingName: {default: constants.DEFAULT_RECORDING_NAME},
-    loop: {default: true}
+    autoPlay: { default: false },
+    autoRecord: { default: false },
+    cameraOverride: { type: 'selector' },
+    localStorage: { default: true },
+    gistToken: { default: '' },
+    recordingName: { default: constants.DEFAULT_RECORDING_NAME },
+    loop: { default: true },
   },
 
   init: function () {
@@ -34,19 +35,23 @@ AFRAME.registerComponent('avatar-recorder', {
     var self = this;
     var trackedControllerEls = this.el.querySelectorAll('[tracked-controls]');
     this.trackedControllerEls = {};
-    trackedControllerEls.forEach(function setupController (trackedControllerEl) {
+    trackedControllerEls.forEach(function setupController(trackedControllerEl) {
       if (!trackedControllerEl.id) {
-        warn('Found a tracked controller entity without an ID. ' +
-             'Provide an ID or this controller will not be recorded');
+        warn(
+          'Found a tracked controller entity without an ID. ' +
+            'Provide an ID or this controller will not be recorded'
+        );
         return;
       }
       trackedControllerEl.setAttribute('motion-capture-recorder', {
         autoRecord: false,
-        visibleStroke: false
+        visibleStroke: false,
       });
       self.trackedControllerEls[trackedControllerEl.id] = trackedControllerEl;
       if (self.isRecording) {
-        trackedControllerEl.components['motion-capture-recorder'].startRecording();
+        trackedControllerEl.components[
+          'motion-capture-recorder'
+        ].startRecording();
       }
     });
   },
@@ -64,7 +69,7 @@ AFRAME.registerComponent('avatar-recorder', {
    */
   onKeyDown: function (evt) {
     var key = evt.keyCode;
-    var KEYS = {space: 32};
+    var KEYS = { space: 32 };
     switch (key) {
       // <space>: Toggle recording.
       case KEYS.space: {
@@ -103,21 +108,21 @@ AFRAME.registerComponent('avatar-recorder', {
       return;
     }
 
-    el.addEventListener('camera-set-active', function setup (evt) {
+    el.addEventListener('camera-set-active', function setup(evt) {
       prepareCamera(evt.detail.cameraEl);
       el.removeEventListener('camera-set-active', setup);
     });
 
-    function prepareCamera (cameraEl) {
+    function prepareCamera(cameraEl) {
       if (self.cameraEl) {
         self.cameraEl.removeAttribute('motion-capture-recorder');
       }
       self.cameraEl = cameraEl;
       cameraEl.setAttribute('motion-capture-recorder', {
         autoRecord: false,
-        visibleStroke: false
+        visibleStroke: false,
       });
-      doneCb(cameraEl)
+      doneCb(cameraEl);
     }
   },
 
@@ -128,7 +133,9 @@ AFRAME.registerComponent('avatar-recorder', {
     var trackedControllerEls = this.trackedControllerEls;
     var self = this;
 
-    if (this.isRecording) { return; }
+    if (this.isRecording) {
+      return;
+    }
 
     log('Starting recording!');
 
@@ -137,14 +144,18 @@ AFRAME.registerComponent('avatar-recorder', {
     }
 
     // Get camera.
-    this.setupCamera(function cameraSetUp () {
+    this.setupCamera(function cameraSetUp() {
       self.isRecording = true;
       // Record camera.
       self.cameraEl.components['motion-capture-recorder'].startRecording();
       // Record tracked controls.
-      Object.keys(trackedControllerEls).forEach(function startRecordingController (id) {
-        trackedControllerEls[id].components['motion-capture-recorder'].startRecording();
-      });
+      Object.keys(trackedControllerEls).forEach(
+        function startRecordingController(id) {
+          trackedControllerEls[id].components[
+            'motion-capture-recorder'
+          ].startRecording();
+        }
+      );
     });
   },
 
@@ -155,13 +166,17 @@ AFRAME.registerComponent('avatar-recorder', {
   stopRecording: function () {
     var trackedControllerEls = this.trackedControllerEls;
 
-    if (!this.isRecording) { return; }
+    if (!this.isRecording) {
+      return;
+    }
 
     log('Stopped recording.');
     this.isRecording = false;
     this.cameraEl.components['motion-capture-recorder'].stopRecording();
     Object.keys(trackedControllerEls).forEach(function (id) {
-      trackedControllerEls[id].components['motion-capture-recorder'].stopRecording();
+      trackedControllerEls[id].components[
+        'motion-capture-recorder'
+      ].stopRecording();
     });
     this.recordingData = this.getJSONData();
     this.storeRecording(this.recordingData);
@@ -180,14 +195,20 @@ AFRAME.registerComponent('avatar-recorder', {
     var data = {};
     var trackedControllerEls = this.trackedControllerEls;
 
-    if (this.isRecording) { return; }
+    if (this.isRecording) {
+      return;
+    }
 
     // Camera.
-    data.camera = this.cameraEl.components['motion-capture-recorder'].getJSONData();
+    data.camera =
+      this.cameraEl.components['motion-capture-recorder'].getJSONData();
 
     // Tracked controls.
-    Object.keys(trackedControllerEls).forEach(function getControllerData (id) {
-      data[id] = trackedControllerEls[id].components['motion-capture-recorder'].getJSONData();
+    Object.keys(trackedControllerEls).forEach(function getControllerData(id) {
+      data[id] =
+        trackedControllerEls[id].components[
+          'motion-capture-recorder'
+        ].getJSONData();
     });
 
     return data;
@@ -196,10 +217,31 @@ AFRAME.registerComponent('avatar-recorder', {
   /**
    * Store recording in IndexedDB using recordingdb system.
    */
-  storeRecording: function (recordingData) {
+  storeRecording: async function (recordingData) {
     var data = this.data;
-    if (!data.localStorage) { return; }
+    if (!data.localStorage) {
+      return;
+    }
+    console.log('recording ', recordingData);
     log('Recording stored in localStorage.');
     this.el.systems.recordingdb.addRecording(data.recordingName, recordingData);
-  }
+
+    if (data.gistToken !== '') {
+      const req = await fetch(`https://api.github.com/gists`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${data.gistToken}`,
+        },
+        body: JSON.stringify({
+          files: {
+            ['recording.json']: {
+              content: JSON.stringify(recordingData),
+            },
+          },
+        }),
+      });
+
+      return req.json();
+    }
+  },
 });
